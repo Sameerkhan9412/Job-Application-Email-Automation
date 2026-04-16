@@ -1,65 +1,153 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 export default function Home() {
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any[]>([]);
+  const [type, setType] = useState("direct");
+  const [loadingFollowUp, setLoadingFollowUp] = useState<string | null>(null);
+
+  // ✅ Fetch contacts
+  useEffect(() => {
+    const fetchContacts = async () => {
+      try {
+        const res = await axios.get("/api/contacts");
+        setContacts(res.data.contacts || []);
+      } catch (err) {
+        console.error("Error fetching contacts:", err);
+      }
+    };
+
+    fetchContacts();
+  }, []);
+
+  // ✅ Selection logic
+  const toggleSelect = (contact: any) => {
+    setSelected((prev) =>
+      prev.some((c) => c.email === contact.email)
+        ? prev.filter((c) => c.email !== contact.email)
+        : [...prev, contact]
+    );
+  };
+
+  const isSelected = (contact: any) => {
+    return selected.some((c) => c.email === contact.email);
+  };
+
+  // ✅ Send emails
+  const sendEmails = async () => {
+    if (selected.length === 0) {
+      alert("Please select at least one contact");
+      return;
+    }
+
+    try {
+      await axios.post("/api/send-mails", {
+        contacts: selected,
+        type,
+      });
+
+      alert("Emails sent successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to send emails");
+    }
+  };
+
+  // 🔥 FOLLOW-UP FUNCTION
+  const sendFollowUp = async (email: string) => {
+    try {
+      setLoadingFollowUp(email);
+
+      const res = await axios.post("/api/follow-up", { email });
+
+      alert(res.data.message || "Follow-up sent!");
+    } catch (err: any) {
+      console.error(err);
+      alert(
+        err?.response?.data?.message || "Failed to send follow-up"
+      );
+    } finally {
+      setLoadingFollowUp(null);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold">📧 Email Automation</h1>
+
+      {/* Email Type */}
+      <div className="my-4">
+        <select
+          className="border p-2 rounded"
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+        >
+          <option value="direct">Direct Application</option>
+          <option value="referral">Referral Request</option>
+        </select>
+      </div>
+
+      {/* Table */}
+      <table className="w-full border">
+        <thead className="bg-gray-100">
+          <tr>
+            <th>Select</th>
+            <th>HR</th>
+            <th>Company</th>
+            <th>Email</th>
+            <th>Follow-Up</th> {/* 🔥 NEW COLUMN */}
+          </tr>
+        </thead>
+
+        <tbody>
+          {contacts.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="text-center p-4">
+                No contacts found
+              </td>
+            </tr>
+          ) : (
+            contacts.map((c, i) => (
+              <tr key={i} className="border-t">
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={isSelected(c)}
+                    onChange={() => toggleSelect(c)}
+                  />
+                </td>
+                <td>{c.hr_name}</td>
+                <td>{c.company_name}</td>
+                <td>{c.email}</td>
+
+                {/* 🔥 FOLLOW-UP BUTTON */}
+                <td>
+                  <button
+                    onClick={() => sendFollowUp(c.email)}
+                    disabled={loadingFollowUp === c.email}
+                    className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm"
+                  >
+                    {loadingFollowUp === c.email
+                      ? "Sending..."
+                      : "Follow Up"}
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+
+      {/* Send Button */}
+      <button
+        onClick={sendEmails}
+        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 mt-4 rounded"
+      >
+        Send Emails ({selected.length})
+      </button>
     </div>
   );
 }
