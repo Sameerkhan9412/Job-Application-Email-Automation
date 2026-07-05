@@ -8,6 +8,10 @@ export interface IEmailLog extends Document {
   status: "sent" | "failed";
   subject: string;
   message: string;
+  messageId?: string;
+  followUpCount: number;
+  lastSentAt: Date;
+  nextFollowUpAt?: Date;
   error?: string;
   createdAt: Date;
   updatedAt: Date;

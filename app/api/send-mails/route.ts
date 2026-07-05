@@ -1,17 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { transporter } from "@/lib/mailer";
-import { directTemplate, referralTemplate } from "@/lib/templates";
+import Template from "@/models/Template";
 import EmailLog from "@/models/EmailLog";
-import { toTitleCase } from "@/lib/utils";
+import { toTitleCase, verifyAuth } from "@/lib/utils";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const wrapHTML = (greeting: string, bodyHTML: string) => {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application</title>
+</head>
+<body style="margin: 0; padding: 20px 0; background: #ffffff; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #111827;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 0 10px;">
+    <p style="margin: 0 0 16px 0;">${greeting}</p>
+    
+    ${bodyHTML}
+    
+    <p style="margin: 24px 0 0 0; color: #111827;">
+      Best regards,<br/>
+      <strong>Sameer</strong><br/>
+      Email: <a href="mailto:sameerkhan.cse1@gmail.com" style="color: #2563eb; text-decoration: underline;">sameerkhan.cse1@gmail.com</a><br/>
+      Phone: <a href="tel:+919412803911" style="color: #2563eb; text-decoration: underline;">+91 9412803911</a><br/>
+      Portfolio: <a href="https://sameerwork.netlify.app" style="color: #2563eb; text-decoration: underline;">sameerwork.netlify.app</a><br/>
+      GitHub: <a href="https://github.com/sameerkhan9412" style="color: #2563eb; text-decoration: underline;">github.com/sameerkhan9412</a><br/>
+      LinkedIn: <a href="https://linkedin.com/in/sameerkhn" style="color: #2563eb; text-decoration: underline;">linkedin.com/in/sameerkhn</a><br/>
+      Resume: <a href="https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab" style="color: #2563eb; text-decoration: underline;">View Resume</a>
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+};
 
 export async function POST(req: NextRequest) {
   try {
     await connectDB();
 
-    const { contacts, type } = await req.json();
+    if (!(await verifyAuth(req))) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+
+    const { contacts, type, role = "fullstack", customSubject } = await req.json();
 
     // ✅ Validation
     if (!contacts || contacts.length === 0) {
@@ -28,42 +63,75 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Load template from MongoDB
+    const template = await Template.findOne({ key: role });
+    if (!template) {
+      return NextResponse.json(
+        { success: false, message: `Template role "${role}" not found in database.` },
+        { status: 400 }
+      );
+    }
+
     const results = [];
 
     for (const contact of contacts) {
-      const { hr_name, name, email } = contact;
+      const { hr_name, company_name, name, email } = contact;
+      const rawCompany = company_name || name || "";
 
       if (!email) continue;
 
       // 🔥 Format names properly
-      const formattedHR = toTitleCase(hr_name);
-      const formattedCompany = toTitleCase(name);
+      const formattedHR = toTitleCase(hr_name || (type === "referral" ? "there" : "Hiring Team"));
+      const formattedCompany = toTitleCase(rawCompany || "your company");
 
-      // ✅ Choose correct template
-      const content =
-        type === "direct"
-          ? directTemplate(formattedHR, formattedCompany)
-          : referralTemplate(formattedHR, formattedCompany);
+      // Replace placeholders in the DB template body
+      const templateBody = type === "direct" ? template.bodyDirect : template.bodyReferral;
+      const evaluatedBody = templateBody
+        .replace(/\{\{company\}\}/gi, formattedCompany)
+        .replace(/\{\{company_name\}\}/gi, formattedCompany)
+        .replace(/\{\{hr\}\}/gi, formattedHR)
+        .replace(/\{\{hr_name\}\}/gi, formattedHR);
+
+      const content = wrapHTML(
+        type === "referral" ? `Hi ${formattedHR} sir,` : `Hi ${formattedHR},`,
+        evaluatedBody
+      );
+
+      // Determine subject line (custom or default template-based subject)
+      let subject = "";
+      if (customSubject) {
+        subject = customSubject
+          .replace(/\{\{company\}\}/gi, formattedCompany)
+          .replace(/\{\{company_name\}\}/gi, formattedCompany)
+          .replace(/\{\{hr\}\}/gi, formattedHR)
+          .replace(/\{\{hr_name\}\}/gi, formattedHR);
+      } else {
+        const defaultSub = type === "direct" ? template.subjectDirect : template.subjectReferral;
+        subject = defaultSub
+          .replace(/\{\{company\}\}/gi, formattedCompany)
+          .replace(/\{\{company_name\}\}/gi, formattedCompany)
+          .replace(/\{\{hr\}\}/gi, formattedHR)
+          .replace(/\{\{hr_name\}\}/gi, formattedHR);
+      }
 
       try {
         // 📧 Send Email
         const info = await transporter.sendMail({
           from: `"Sameer" <${process.env.EMAIL_USER}>`,
           to: email,
-          subject:
-            type === "direct"
-              ? `Application for Software Engineer / Full Stack Developer at ${formattedCompany} | Immediate Joiner`
-              : `Referral Request for Software Engineer Role at ${formattedCompany}`,
+          subject: subject,
           html: content,
         });
 
-        // ✅ Save log
+        // ✅ Save log (with subject and body content)
         await EmailLog.create({
           email,
           hr_name: formattedHR,
           company: formattedCompany,
           status: "sent",
           type,
+          subject,
+          message: content,
           messageId: info.messageId,
           followUpCount: 0,
           lastSentAt: new Date(),
@@ -81,6 +149,8 @@ export async function POST(req: NextRequest) {
           company: formattedCompany,
           status: "failed",
           type,
+          subject,
+          message: content,
           error: error.message,
         });
 
