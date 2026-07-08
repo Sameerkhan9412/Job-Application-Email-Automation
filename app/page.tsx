@@ -22,6 +22,8 @@ interface EmailLog {
   followUpCount: number;
   lastSentAt: string;
   createdAt: string;
+  hasReplied?: boolean;
+  isAutoFollowUpPaused?: boolean;
 }
 
 interface DBTemplate {
@@ -137,6 +139,14 @@ export default function Home() {
   const [logTotalPages, setLogTotalPages] = useState(1);
   const [logTotalCount, setLogTotalCount] = useState(0);
   const logLimit = 10;
+
+  // Follow-up / Reminder states
+  const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
+  const [checkingReplies, setCheckingReplies] = useState(false);
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
+  const [followUpMessage, setFollowUpMessage] = useState("");
+  const [targetFollowUpIds, setTargetFollowUpIds] = useState<string[]>([]);
+  const [sendingFollowUp, setSendingFollowUp] = useState(false);
 
   // Manual contacts state
   const [manualContacts, setManualContacts] = useState<Contact[]>([]);
@@ -460,6 +470,66 @@ export default function Home() {
     } finally {
       setLoadingFollowUp(null);
     }
+  };
+
+  // Trigger IMAP check for replies
+  const handleCheckReplies = async () => {
+    setCheckingReplies(true);
+    try {
+      const res = await axios.post("/api/logs/check-replies", {}, getHeaders());
+      if (res.data.success) {
+        showFeedback(
+          "success",
+          res.data.updatedCount > 0
+            ? `Checked replies: found ${res.data.updatedCount} new reply/replies!`
+            : "Checked replies: No new replies found."
+        );
+        fetchLogs(logPage);
+      }
+    } catch (err: any) {
+      console.error("Check replies error:", err);
+      showFeedback("error", err.response?.data?.message || "Failed to check replies");
+    } finally {
+      setCheckingReplies(false);
+    }
+  };
+
+  // Open the follow-up/reminder modal
+  const openFollowUpModal = (logIds: string[]) => {
+    setTargetFollowUpIds(logIds);
+    setFollowUpMessage("");
+    setShowFollowUpModal(true);
+  };
+
+  // Handle bulk or single follow-up reminders submission
+  const submitFollowUpReminders = async () => {
+    if (targetFollowUpIds.length === 0) return;
+    setSendingFollowUp(true);
+    try {
+      const res = await axios.post(
+        "/api/logs/bulk-followup",
+        { logIds: targetFollowUpIds, customMessage: followUpMessage },
+        getHeaders()
+      );
+      if (res.data.success) {
+        showFeedback("success", `Successfully sent follow-up/reminder to ${targetFollowUpIds.length} candidate(s)!`);
+        setShowFollowUpModal(false);
+        setSelectedLogIds([]);
+        fetchLogs(logPage);
+      }
+    } catch (err: any) {
+      console.error("Bulk follow-up error:", err);
+      alert(err.response?.data?.message || "Failed to send follow-up reminder(s).");
+    } finally {
+      setSendingFollowUp(false);
+    }
+  };
+
+  // Checkbox toggle for email logs
+  const toggleSelectLog = (logId: string) => {
+    setSelectedLogIds((prev) =>
+      prev.includes(logId) ? prev.filter((id) => id !== logId) : [...prev, logId]
+    );
   };
 
   // Selection checkboxes
@@ -1838,20 +1908,49 @@ export default function Home() {
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-1">Email Logs</h1>
                 <p className="text-sm text-slate-400">Track delivery status and resend from previous records.</p>
               </div>
-              <button
-                onClick={() => fetchLogs(logPage)}
-                disabled={loadingLogs}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl glass border border-white/[0.08] text-slate-300 hover:text-white hover:border-white/[0.15] transition-all disabled:opacity-40"
-              >
-                {loadingLogs ? (
-                  <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400 border-t-transparent animate-spin" />
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.183" />
-                  </svg>
+              <div className="flex items-center gap-2">
+                {selectedLogIds.length > 0 && (
+                  <button
+                    onClick={() => openFollowUpModal(selectedLogIds)}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-900/20 transition-all"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Send Reminder ({selectedLogIds.length})
+                  </button>
                 )}
-                Refresh
-              </button>
+
+                <button
+                  onClick={handleCheckReplies}
+                  disabled={checkingReplies}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-900/20 transition-all disabled:opacity-40"
+                >
+                  {checkingReplies ? (
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3 3 6-6" />
+                    </svg>
+                  )}
+                  Check Replies
+                </button>
+
+                <button
+                  onClick={() => fetchLogs(logPage)}
+                  disabled={loadingLogs}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl glass border border-white/[0.08] text-slate-300 hover:text-white hover:border-white/[0.15] transition-all disabled:opacity-40"
+                >
+                  {loadingLogs ? (
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400 border-t-transparent animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.183" />
+                    </svg>
+                  )}
+                  Refresh
+                </button>
+              </div>
             </div>
 
             <div className="glass border border-white/[0.06] rounded-2xl overflow-hidden">
@@ -1859,6 +1958,21 @@ export default function Home() {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="bg-white/[0.02] text-slate-400 sticky top-0 border-b border-white/[0.06]">
                     <tr>
+                      <th className="p-3.5 w-10">
+                        <input
+                          type="checkbox"
+                          checked={logs.length > 0 && logs.filter(l => l.status === "sent" && !l.hasReplied).every(l => selectedLogIds.includes(l._id))}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const eligible = logs.filter(l => l.status === "sent" && !l.hasReplied).map(l => l._id);
+                              setSelectedLogIds(eligible);
+                            } else {
+                              setSelectedLogIds([]);
+                            }
+                          }}
+                          className="rounded border-white/[0.1] bg-white/[0.05] text-violet-500 focus:ring-violet-500/30"
+                        />
+                      </th>
                       <th className="p-3.5 font-semibold">Recipient</th>
                       <th className="p-3.5 font-semibold hidden sm:table-cell">Company</th>
                       <th className="p-3.5 font-semibold hidden md:table-cell">Subject</th>
@@ -1870,7 +1984,7 @@ export default function Home() {
                   <tbody className="divide-y divide-white/[0.03]">
                     {logs.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center p-16">
+                        <td colSpan={7} className="text-center p-16">
                           <div className="flex flex-col items-center gap-3">
                             <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
                               <svg className="w-6 h-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1884,6 +1998,16 @@ export default function Home() {
                     ) : (
                       logs.map((log) => (
                         <tr key={log._id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="p-3.5 w-10">
+                            {log.status === "sent" && !log.hasReplied ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedLogIds.includes(log._id)}
+                                onChange={() => toggleSelectLog(log._id)}
+                                className="rounded border-white/[0.1] bg-white/[0.05] text-violet-500 focus:ring-violet-500/30"
+                              />
+                            ) : null}
+                          </td>
                           <td className="p-3.5">
                             <div className="flex items-center gap-2.5">
                               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-white/[0.06] flex items-center justify-center text-[10px] font-bold text-violet-300 flex-shrink-0">
@@ -1905,30 +2029,53 @@ export default function Home() {
                             })}
                           </td>
                           <td className="p-3.5">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-full border uppercase tracking-wide ${
-                              log.status === "sent"
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                            }`}>
-                              <div className={`w-1.5 h-1.5 rounded-full ${log.status === "sent" ? "bg-emerald-400" : "bg-rose-400"}`} />
-                              {log.status}
-                            </span>
+                            <div className="flex flex-wrap gap-1.5 items-center">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-full border uppercase tracking-wide ${
+                                log.status === "sent"
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                  : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                              }`}>
+                                <div className={`w-1.5 h-1.5 rounded-full ${log.status === "sent" ? "bg-emerald-400" : "bg-rose-400"}`} />
+                                {log.status}
+                              </span>
+                              {log.hasReplied && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-full border uppercase tracking-wide bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
+                                  Replied
+                                </span>
+                              )}
+                              {log.isAutoFollowUpPaused && !log.hasReplied && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-full border uppercase tracking-wide bg-amber-500/10 text-amber-400 border-amber-500/20">
+                                  Paused
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="p-3.5 text-right">
-                            <button
-                              onClick={() => handleResend(log._id)}
-                              disabled={loadingResend === log._id}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 hover:bg-violet-500/20 transition-all disabled:opacity-30"
-                            >
-                              {loadingResend === log._id ? (
-                                <div className="w-3 h-3 rounded-full border-2 border-violet-400 border-t-transparent animate-spin" />
-                              ) : (
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.183" />
-                                </svg>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleResend(log._id)}
+                                disabled={loadingResend === log._id}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 hover:bg-violet-500/20 transition-all disabled:opacity-30"
+                              >
+                                {loadingResend === log._id ? (
+                                  <div className="w-3 h-3 rounded-full border-2 border-violet-400 border-t-transparent animate-spin" />
+                                ) : (
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.183" />
+                                  </svg>
+                                )}
+                                {loadingResend === log._id ? "..." : "Resend"}
+                              </button>
+
+                              {log.status === "sent" && !log.hasReplied && (
+                                <button
+                                  onClick={() => openFollowUpModal([log._id])}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all"
+                                >
+                                  Remind
+                                </button>
                               )}
-                              {loadingResend === log._id ? "..." : "Resend"}
-                            </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -1988,6 +2135,76 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* ===== FOLLOW-UP / REMINDER MODAL ===== */}
+      {showFollowUpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowFollowUpModal(false)}>
+          <div className="absolute inset-0 bg-[#030712]/90 backdrop-blur-xl" />
+          <div
+            className="relative w-full max-w-lg animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="glass-strong border border-white/[0.08] rounded-3xl p-6 sm:p-8 shadow-2xl">
+              <button
+                onClick={() => setShowFollowUpModal(false)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full glass border border-white/[0.08] flex items-center justify-center text-slate-400 hover:text-white hover:border-white/[0.15] transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              <div className="mb-6">
+                <h3 className="text-xl font-black text-white mb-1">✉️ Send Follow-up Reminder</h3>
+                <p className="text-sm text-slate-400">
+                  Sending a thread-linked reply to {targetFollowUpIds.length} recipient(s).
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    Custom Message (Optional)
+                  </label>
+                  <textarea
+                    rows={6}
+                    placeholder="Write a custom follow-up message here... Leave empty to send the default template follow-up reply."
+                    value={followUpMessage}
+                    onChange={(e) => setFollowUpMessage(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/[0.08] text-white rounded-xl px-4 py-3 text-xs outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all placeholder:text-slate-600 resize-none animate-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                    💡 If left blank, the system will send the standard follow-up reply based on the original email type and follow-up count.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 justify-end pt-4 border-t border-white/[0.06]">
+                  <button
+                    onClick={() => setShowFollowUpModal(false)}
+                    className="px-4 py-2 text-xs font-semibold rounded-xl glass border border-white/[0.08] text-slate-300 hover:text-white hover:border-white/[0.15] transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitFollowUpReminders}
+                    disabled={sendingFollowUp}
+                    className="flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:opacity-90 transition-all disabled:opacity-50"
+                  >
+                    {sendingFollowUp ? (
+                      <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                    )}
+                    {sendingFollowUp ? "Sending..." : "Send Reminder"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== TEMPLATE MANAGER MODAL ===== */}
       {showTemplateModal && (

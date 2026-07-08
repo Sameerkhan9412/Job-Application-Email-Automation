@@ -12,6 +12,8 @@ cron.schedule("0 */6 * * *", async () => {
 
   const logs = await EmailLog.find({
     status: "sent",
+    hasReplied: false,
+    isAutoFollowUpPaused: false,
     nextFollowUpAt: { $lte: now },
     followUpCount: { $lt: 2 }, // max 2 follow-ups
   });

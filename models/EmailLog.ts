@@ -12,6 +12,8 @@ export interface IEmailLog extends Document {
   followUpCount: number;
   lastSentAt: Date;
   nextFollowUpAt?: Date;
+  hasReplied: boolean;
+  isAutoFollowUpPaused: boolean;
   error?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -61,6 +63,14 @@ const EmailLogSchema = new Schema<IEmailLog>(
 
     nextFollowUpAt: {
       type: Date,
+    },
+    hasReplied: {
+      type: Boolean,
+      default: false,
+    },
+    isAutoFollowUpPaused: {
+      type: Boolean,
+      default: false,
     },
     error: {
       type: String,
