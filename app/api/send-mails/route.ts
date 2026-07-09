@@ -7,6 +7,33 @@ import { toTitleCase, verifyAuth } from "@/lib/utils";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const stripHTML = (html: string) => {
+  return html
+    .replace(/<p[^>]*>/gi, "")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<strong>/gi, "")
+    .replace(/<\/strong>/gi, "")
+    .replace(/<a[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, "$2 ($1)")
+    .replace(/<[^>]*>/g, "")
+    .trim();
+};
+
+const wrapText = (greeting: string, bodyText: string) => {
+  return `${greeting}
+
+${bodyText}
+
+Best regards,
+Sameer
+Email: sameerkhan.cse1@gmail.com
+Phone: +91 9412803911
+Portfolio: https://sameerwork.vercel.app/
+GitHub: https://github.com/sameerkhan9412
+LinkedIn: https://linkedin.com/in/sameerkhn
+Resume: https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab`.trim();
+};
+
 const wrapHTML = (greeting: string, bodyHTML: string) => {
   return `
 <!DOCTYPE html>
@@ -27,7 +54,7 @@ const wrapHTML = (greeting: string, bodyHTML: string) => {
       <strong>Sameer</strong><br/>
       Email: <a href="mailto:sameerkhan.cse1@gmail.com" style="color: #2563eb; text-decoration: underline;">sameerkhan.cse1@gmail.com</a><br/>
       Phone: <a href="tel:+919412803911" style="color: #2563eb; text-decoration: underline;">+91 9412803911</a><br/>
-      Portfolio: <a href="https://sameerwork.netlify.app" style="color: #2563eb; text-decoration: underline;">sameerwork.netlify.app</a><br/>
+      Portfolio: <a href="https://sameerwork.vercel.app" style="color: #2563eb; text-decoration: underline;">sameerwork.netlify.app</a><br/>
       GitHub: <a href="https://github.com/sameerkhan9412" style="color: #2563eb; text-decoration: underline;">github.com/sameerkhan9412</a><br/>
       LinkedIn: <a href="https://linkedin.com/in/sameerkhn" style="color: #2563eb; text-decoration: underline;">linkedin.com/in/sameerkhn</a><br/>
       Resume: <a href="https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab" style="color: #2563eb; text-decoration: underline;">View Resume</a>
@@ -46,7 +73,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const { contacts, type, role = "fullstack", customSubject } = await req.json();
+    const { contacts, type, role = "fullstack", customSubject, format = "html" } = await req.json();
 
     // ✅ Validation
     if (!contacts || contacts.length === 0) {
@@ -92,10 +119,19 @@ export async function POST(req: NextRequest) {
         .replace(/\{\{hr\}\}/gi, formattedHR)
         .replace(/\{\{hr_name\}\}/gi, formattedHR);
 
-      const content = wrapHTML(
-        type === "referral" ? `Hi ${formattedHR} sir,` : `Hi ${formattedHR},`,
-        evaluatedBody
-      );
+      let content = "";
+      if (format === "text") {
+        const strippedBody = stripHTML(evaluatedBody);
+        content = wrapText(
+          type === "referral" ? `Dear ${formattedHR} sir,` : `Dear ${formattedHR},`,
+          strippedBody
+        );
+      } else {
+        content = wrapHTML(
+          type === "referral" ? `Hi ${formattedHR} sir,` : `Dear ${formattedHR},`,
+          evaluatedBody
+        );
+      }
 
       // Determine subject line (custom or default template-based subject)
       let subject = "";
@@ -120,7 +156,7 @@ export async function POST(req: NextRequest) {
           from: `"Sameer" <${process.env.EMAIL_USER}>`,
           to: email,
           subject: subject,
-          html: content,
+          ...(format === "text" ? { text: content } : { html: content }),
         });
 
         // ✅ Save log (with subject and body content)

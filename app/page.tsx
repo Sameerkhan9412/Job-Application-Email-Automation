@@ -123,6 +123,7 @@ export default function Home() {
   const [type, setType] = useState<"direct" | "referral">("direct");
   const [role, setRole] = useState("fullstack");
   const [customSubject, setCustomSubject] = useState("");
+  const [emailFormat, setEmailFormat] = useState<"html" | "text">("html");
 
   // UI/Loading states
   const [sending, setSending] = useState(false);
@@ -419,7 +420,7 @@ export default function Home() {
     try {
       const res = await axios.post(
         "/api/send-mails",
-        { contacts: selected, type, role, customSubject: customSubject.trim() || undefined },
+        { contacts: selected, type, role, customSubject: customSubject.trim() || undefined, format: emailFormat },
         getHeaders()
       );
 
@@ -549,6 +550,48 @@ export default function Home() {
     } else {
       setSelected(contacts);
     }
+  };
+
+  const stripHTML = (html: string) => {
+    return html
+      .replace(/<p[^>]*>/gi, "")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<strong>/gi, "")
+      .replace(/<\/strong>/gi, "")
+      .replace(/<a[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, "$2 ($1)")
+      .replace(/<[^>]*>/g, "")
+      .trim();
+  };
+
+  const getPreviewText = () => {
+    const hr = "Hiring Team";
+    const company = "Acme Corp";
+    const greeting = type === "referral" ? `Hi ${hr} sir,` : `Hi ${hr},`;
+
+    const activeTpl = getSelectedTemplate();
+    if (!activeTpl) return "Loading preview...";
+
+    const rawBody = type === "direct" ? activeTpl.bodyDirect : activeTpl.bodyReferral;
+    const strippedBody = stripHTML(rawBody);
+    const evaluatedBody = strippedBody
+      .replace(/\{\{company\}\}/gi, company)
+      .replace(/\{\{company_name\}\}/gi, company)
+      .replace(/\{\{hr\}\}/gi, hr)
+      .replace(/\{\{hr_name\}\}/gi, hr);
+
+    return `${greeting}
+
+${evaluatedBody}
+
+Best regards,
+Sameer
+Email: sameerkhan.cse1@gmail.com
+Phone: +91 9412803911
+Portfolio: https://sameerwork.vercel.app/
+GitHub: https://github.com/sameerkhan9412
+LinkedIn: https://linkedin.com/in/sameerkhn
+Resume: https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab`;
   };
 
   // Dynamic template rendering preview
@@ -1572,6 +1615,35 @@ export default function Home() {
                   </div>
                 </div>
 
+                {/* Email Format Toggle */}
+                <div className="mb-5">
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    Email Format
+                  </label>
+                  <div className="flex bg-white/[0.03] p-1 rounded-xl w-full sm:w-fit border border-white/[0.06]">
+                    <button
+                      onClick={() => setEmailFormat("html")}
+                      className={`flex-1 sm:flex-none px-4 sm:px-5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                        emailFormat === "html"
+                          ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-600/20"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Styled HTML
+                    </button>
+                    <button
+                      onClick={() => setEmailFormat("text")}
+                      className={`flex-1 sm:flex-none px-4 sm:px-5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                        emailFormat === "text"
+                          ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-600/20"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Plain Text (Normal Text)
+                    </button>
+                  </div>
+                </div>
+
                 {/* Template Selector */}
                 <div className="mb-5">
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
@@ -1660,8 +1732,14 @@ export default function Home() {
                     {type === "direct" ? "Direct" : "Referral"}
                   </span>
                 </div>
-                <div className="bg-[#0a0f1e] border border-white/[0.04] rounded-xl p-4 flex-1 overflow-y-auto max-h-[350px]">
-                  <div dangerouslySetInnerHTML={{ __html: getPreviewBody() }} />
+                 <div className="bg-[#0a0f1e] border border-white/[0.04] rounded-xl p-4 flex-1 overflow-y-auto max-h-[350px]">
+                  {emailFormat === "html" ? (
+                    <div dangerouslySetInnerHTML={{ __html: getPreviewBody() }} />
+                  ) : (
+                    <pre className="whitespace-pre-wrap font-sans text-xs text-slate-300 leading-relaxed font-normal">
+                      {getPreviewText()}
+                    </pre>
+                  )}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-3 text-center">
                   Placeholders resolve dynamically for each contact

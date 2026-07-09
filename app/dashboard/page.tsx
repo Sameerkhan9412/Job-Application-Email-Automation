@@ -181,7 +181,7 @@ export default function DashboardPage() {
 
             <div className="border p-3 text-sm whitespace-pre-line max-h-60 overflow-y-auto">
               {type === "direct"
-                ? `Hi ${preview.hr_name},
+                ? `Dear ${preview.hr_name},
 
 I am Sameer, a MERN Stack Developer.
 
@@ -193,7 +193,7 @@ Resume: your-link
 Portfolio: your-link
 
 Thanks`
-                : `Hi ${preview.hr_name},
+                : `Hi ${preview.hr_name} sir,
 
 I hope you're doing well.
 

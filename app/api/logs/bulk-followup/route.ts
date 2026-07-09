@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       // Generate default message if custom message not provided
       const defaultFollowUpText =
         log.followUpCount === 0
-          ? `Hi ${log.hr_name || "Hiring Team"},
+          ? `Dear ${log.hr_name || "Hiring Team"},
 
 Just following up on my previous email regarding opportunities at ${log.company || "your company"}.
 
@@ -48,7 +48,7 @@ Looking forward to your response.
 
 Best regards,
 Sameer`
-          : `Hi ${log.hr_name || "Hiring Team"},
+          : `Dear ${log.hr_name || "Hiring Team"},
 
 I wanted to check in again regarding my application at ${log.company || "your company"}.
 
