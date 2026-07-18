@@ -64,7 +64,7 @@ Sameer`;
 
     // 📧 Send follow-up
     const info = await transporter.sendMail({
-      from: `"Sameer" <${process.env.EMAIL_USER}>`,
+      from: `"Sameer" <${process.env.MAIL_USER}>`,
       to: log.email,
       subject: `Re: Opportunity at ${log.company}`,
       text: followUpText,

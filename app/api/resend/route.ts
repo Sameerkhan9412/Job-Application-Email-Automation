@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     // Resend using the stored information
     const isHtml = log.message.includes("<!DOCTYPE html>") || log.message.includes("<html");
     const info = await transporter.sendMail({
-      from: `"Sameer" <${process.env.EMAIL_USER}>`,
+      from: `"Sameer" <${process.env.MAIL_USER}>`,
       to: log.email,
       subject: log.subject,
       ...(isHtml ? { html: log.message } : { text: log.message }),
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       email: log.email,
       hr_name: log.hr_name,
       company: log.company,
+      phone: log.phone || undefined,
       status: "sent",
       type: log.type,
       subject: log.subject,

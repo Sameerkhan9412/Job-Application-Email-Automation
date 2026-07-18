@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any[]>([]);
   const [preview, setPreview] = useState<Contact | null>(null);
+  const [latestSentDates, setLatestSentDates] = useState<Record<string, string>>({});
 
   // 📥 Fetch Contacts
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function DashboardPage() {
     try {
       const res = await axios.get("/api/contacts");
       setContacts(res.data.contacts || []);
+      setLatestSentDates(res.data.latestSentDates || {});
     } catch (err) {
       alert("Failed to load contacts");
     }
@@ -126,6 +128,8 @@ export default function DashboardPage() {
               <th className="p-2">HR Name</th>
               <th className="p-2">Company</th>
               <th className="p-2">Email</th>
+              <th className="p-2">Phone</th>
+              <th className="p-2">Last Sent</th>
               <th className="p-2">Preview</th>
               <th className="p-2">Status</th>
             </tr>
@@ -145,6 +149,18 @@ export default function DashboardPage() {
                 <td className="p-2">{c.hr_name}</td>
                 <td className="p-2">{c.company_name}</td>
                 <td className="p-2">{c.email}</td>
+                <td className="p-2">{c.phone || "-"}</td>
+                <td className="p-2">
+                  {latestSentDates[c.email.toLowerCase()] ? (
+                    new Date(latestSentDates[c.email.toLowerCase()]).toLocaleString("en-IN", {
+                      hour12: true,
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
+                  ) : (
+                    <span className="text-gray-400 italic">Never</span>
+                  )}
+                </td>
 
                 {/* 👁 Preview */}
                 <td className="p-2">

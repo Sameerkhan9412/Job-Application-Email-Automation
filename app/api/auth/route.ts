@@ -35,13 +35,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Auto-seed admin if no admins are present in database
-    const adminCount = await Admin.countDocuments();
-    if (adminCount === 0) {
-      await Admin.create({
-        username: "sameer",
-        passwordHash: hashPassword("Sameer@9412"),
+    const envUsername = (process.env.ADMIN_USERNAME || "sameer").trim();
+    const envPassword = process.env.ADMIN_PASSWORD || "Sameer@9412";
+    const envPasswordHash = hashPassword(envPassword);
+
+    // Auto-seed/sync admin in database with environment variables
+    let currentAdmin = await Admin.findOne({ username: envUsername });
+    if (!currentAdmin) {
+      // Clear other admins to keep credentials synchronized with environment config
+      await Admin.deleteMany({});
+      currentAdmin = await Admin.create({
+        username: envUsername,
+        passwordHash: envPasswordHash,
       });
+    } else if (currentAdmin.passwordHash !== envPasswordHash) {
+      currentAdmin.passwordHash = envPasswordHash;
+      await currentAdmin.save();
     }
 
     const admin = await Admin.findOne({ username: username.trim() });

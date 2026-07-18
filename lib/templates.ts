@@ -103,7 +103,7 @@ export const getEmailTemplate = (
     <p style="margin: 24px 0 0 0; color: #111827;">
       Best regards,<br/>
       <strong>Sameer</strong><br/>
-      Email: <a href="mailto:sameerkhan.cse1@gmail.com" style="color: #2563eb; text-decoration: underline;">sameerkhan.cse1@gmail.com</a><br/>
+      Email: <a href="mailto:${process.env.MAIL_USER || "sameerkhan.cse1@gmail.com"}" style="color: #2563eb; text-decoration: underline;">${process.env.MAIL_USER || "sameerkhan.cse1@gmail.com"}</a><br/>
       Phone: <a href="tel:+919412803911" style="color: #2563eb; text-decoration: underline;">+91 9412803911</a><br/>
       Portfolio: <a href="https://sameerwork.netlify.app" style="color: #2563eb; text-decoration: underline;">sameerwork.netlify.app</a><br/>
       GitHub: <a href="https://github.com/sameerkhan9412" style="color: #2563eb; text-decoration: underline;">github.com/sameerkhan9412</a><br/>

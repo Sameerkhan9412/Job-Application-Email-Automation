@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/db";
+import EmailLog from "@/models/EmailLog";
 
 export async function GET() {
   try {
@@ -27,10 +29,32 @@ export async function GET() {
 
     console.log("PARSED:", data);
 
+    // Fetch latest sent dates from MongoDB
+    let latestSentDates: Record<string, string> = {};
+    try {
+      await connectDB();
+      const logs = await EmailLog.aggregate([
+        {
+          $group: {
+            _id: { $toLower: "$email" },
+            lastSentAt: { $max: "$lastSentAt" },
+          },
+        },
+      ]);
+      logs.forEach((log) => {
+        if (log._id && log.lastSentAt) {
+          latestSentDates[log._id] = log.lastSentAt.toISOString();
+        }
+      });
+    } catch (dbErr) {
+      console.error("Error fetching latest sent dates from DB:", dbErr);
+    }
+
     return NextResponse.json({
       success: true,
       count: data.data?.length || 0,
       contacts: data.data || [],
+      latestSentDates,
     });
 
   } catch (error) {

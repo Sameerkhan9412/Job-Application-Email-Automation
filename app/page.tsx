@@ -7,6 +7,7 @@ interface Contact {
   hr_name: string;
   company_name: string;
   email: string;
+  phone?: string;
   isManual?: boolean;
 }
 
@@ -151,12 +152,14 @@ export default function Home() {
 
   // Manual contacts state
   const [manualContacts, setManualContacts] = useState<Contact[]>([]);
+  const [latestSentDates, setLatestSentDates] = useState<Record<string, string>>({});
 
   // Manual adding form inputs
   const [activeManualTab, setActiveManualTab] = useState<"single" | "bulk">("single");
   const [singleHR, setSingleHR] = useState("");
   const [singleCompany, setSingleCompany] = useState("");
   const [singleEmail, setSingleEmail] = useState("");
+  const [singlePhone, setSinglePhone] = useState("");
   const [bulkText, setBulkText] = useState("");
 
   // Feedback notifications
@@ -274,6 +277,7 @@ export default function Home() {
       try {
         const res = await axios.get("/api/contacts");
         fetched = res.data.contacts || [];
+        setLatestSentDates(res.data.latestSentDates || {});
       } catch (err) {
         console.error("Error loading spreadsheet contacts:", err);
       }
@@ -327,6 +331,7 @@ export default function Home() {
       hr_name: singleHR.trim(),
       company_name: singleCompany.trim(),
       email: emailFormatted,
+      phone: singlePhone.trim() || undefined,
       isManual: true,
     };
 
@@ -337,6 +342,7 @@ export default function Home() {
     setSingleHR("");
     setSingleCompany("");
     setSingleEmail("");
+    setSinglePhone("");
     showFeedback("success", "Manual contact added!");
   };
 
@@ -359,9 +365,16 @@ export default function Home() {
         const hr = parts[0];
         const company = parts[1];
         const email = parts[2].toLowerCase();
+        const phone = parts[3] || undefined;
 
         if (email.includes("@") && email.includes(".")) {
-          const contact: Contact = { hr_name: hr, company_name: company, email, isManual: true };
+          const contact: Contact = {
+            hr_name: hr,
+            company_name: company,
+            email,
+            phone: phone ? phone.trim() : undefined,
+            isManual: true,
+          };
           if (
             contacts.some((c) => c.email.toLowerCase() === email) ||
             parsedContacts.some((c) => c.email === email)
@@ -426,6 +439,12 @@ export default function Home() {
 
       if (res.data.success) {
         showFeedback("success", `Successfully processed ${selected.length} emails!`);
+        const nowStr = new Date().toISOString();
+        const newDates = { ...latestSentDates };
+        selected.forEach((c) => {
+          newDates[c.email.toLowerCase()] = nowStr;
+        });
+        setLatestSentDates(newDates);
         setSelected([]);
         fetchLogs(1);
       } else {
@@ -446,6 +465,12 @@ export default function Home() {
       const res = await axios.post("/api/resend", { logId }, getHeaders());
       if (res.data.success) {
         showFeedback("success", "Email successfully resent!");
+        if (res.data.log?.email) {
+          setLatestSentDates((prev) => ({
+            ...prev,
+            [res.data.log.email.toLowerCase()]: new Date().toISOString(),
+          }));
+        }
         fetchLogs(logPage);
       } else {
         alert(res.data.message || "Failed to resend");
@@ -464,6 +489,10 @@ export default function Home() {
       setLoadingFollowUp(email);
       const res = await axios.post("/api/follow-up", { email }, getHeaders());
       showFeedback("success", res.data.message || "Follow-up sent!");
+      setLatestSentDates((prev) => ({
+        ...prev,
+        [email.toLowerCase()]: new Date().toISOString(),
+      }));
       fetchLogs(logPage);
     } catch (err: any) {
       console.error(err);
@@ -514,6 +543,13 @@ export default function Home() {
       );
       if (res.data.success) {
         showFeedback("success", `Successfully sent follow-up/reminder to ${targetFollowUpIds.length} candidate(s)!`);
+        const emails = logs.filter((l) => targetFollowUpIds.includes(l._id)).map((l) => l.email.toLowerCase());
+        const nowStr = new Date().toISOString();
+        const newDates = { ...latestSentDates };
+        emails.forEach((email) => {
+          newDates[email] = nowStr;
+        });
+        setLatestSentDates(newDates);
         setShowFollowUpModal(false);
         setSelectedLogIds([]);
         fetchLogs(logPage);
@@ -1798,13 +1834,15 @@ Resume: https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab`;
                         <th className="p-3 font-semibold">HR Name</th>
                         <th className="p-3 font-semibold">Company</th>
                         <th className="p-3 font-semibold hidden sm:table-cell">Email</th>
+                        <th className="p-3 font-semibold hidden md:table-cell">Phone</th>
+                        <th className="p-3 font-semibold hidden sm:table-cell">Last Sent</th>
                         <th className="p-3 text-right font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.03]">
                       {loadingContacts ? (
                         <tr>
-                          <td colSpan={5} className="text-center p-12">
+                          <td colSpan={7} className="text-center p-12">
                             <div className="flex flex-col items-center gap-3">
                               <div className="w-6 h-6 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
                               <span className="text-slate-500 text-xs">Loading contacts...</span>
@@ -1813,7 +1851,7 @@ Resume: https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab`;
                         </tr>
                       ) : contacts.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="text-center p-12">
+                          <td colSpan={7} className="text-center p-12">
                             <div className="flex flex-col items-center gap-3">
                               <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
                                 <svg className="w-6 h-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1852,6 +1890,7 @@ Resume: https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab`;
                             </td>
                             <td className="p-3 text-slate-300 truncate max-w-[120px]">{c.company_name}</td>
                             <td className="p-3 text-slate-400 hidden sm:table-cell truncate max-w-[180px]">{c.email}</td>
+                            <td className="p-3 text-slate-400 hidden md:table-cell truncate max-w-[150px]">{c.phone || <span className="text-slate-600 italic text-xs">N/A</span>}</td>
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-1.5">
                                 {c.isManual ? (
@@ -1925,15 +1964,16 @@ Resume: https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab`;
                   <form onSubmit={handleAddSingle} className="space-y-4 flex-1 flex flex-col">
                     <div className="space-y-3 flex-1">
                       {[
-                        { label: "HR Name", placeholder: "e.g. Priyanjali", value: singleHR, setter: setSingleHR, type: "text" },
-                        { label: "Company", placeholder: "e.g. Technopedia", value: singleCompany, setter: setSingleCompany, type: "text" },
-                        { label: "Email Address", placeholder: "e.g. hr@company.com", value: singleEmail, setter: setSingleEmail, type: "email" },
+                        { label: "HR Name", placeholder: "e.g. Priyanjali", value: singleHR, setter: setSingleHR, type: "text", required: true },
+                        { label: "Company", placeholder: "e.g. Technopedia", value: singleCompany, setter: setSingleCompany, type: "text", required: true },
+                        { label: "Email Address", placeholder: "e.g. hr@company.com", value: singleEmail, setter: setSingleEmail, type: "email", required: true },
+                        { label: "Phone Number (Optional)", placeholder: "e.g. +91 98765 43210", value: singlePhone, setter: setSinglePhone, type: "tel", required: false },
                       ].map((field, i) => (
                         <div key={i}>
                           <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">{field.label}</label>
                           <input
                             type={field.type}
-                            required
+                            required={field.required}
                             placeholder={field.placeholder}
                             value={field.value}
                             onChange={(e) => field.setter(e.target.value)}
@@ -1958,12 +1998,12 @@ Resume: https://drive.google.com/file/d/1_Ky8_5W-IkpzoDCGfBNu1sVPCalUOtab`;
                       </div>
                       <textarea
                         rows={7}
-                        placeholder="HR Name, Company, email@address.com&#10;John Doe, Google, john@google.com"
+                        placeholder="HR Name, Company, email@address.com, Phone (optional)&#10;John Doe, Google, john@google.com, +91 9876543210"
                         value={bulkText}
                         onChange={(e) => setBulkText(e.target.value)}
                         className="w-full bg-white/[0.03] border border-white/[0.08] text-white rounded-xl px-4 py-3 text-xs outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 transition-all placeholder:text-slate-600 font-mono resize-none"
                       />
-                      <div className="text-[10px] text-slate-500 mt-1.5">One contact per line: Name, Company, Email</div>
+                      <div className="text-[10px] text-slate-500 mt-1.5">One contact per line: Name, Company, Email, Phone (Optional)</div>
                     </div>
                     <button
                       type="submit"

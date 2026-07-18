@@ -26,7 +26,7 @@ ${bodyText}
 
 Best regards,
 Sameer
-Email: sameerkhan.cse1@gmail.com
+Email: ${process.env.MAIL_USER || "sameerkhan.cse1@gmail.com"}
 Phone: +91 9412803911
 Portfolio: https://sameerwork.vercel.app/
 GitHub: https://github.com/sameerkhan9412
@@ -52,7 +52,7 @@ const wrapHTML = (greeting: string, bodyHTML: string) => {
     <p style="margin: 24px 0 0 0; color: #111827;">
       Best regards,<br/>
       <strong>Sameer</strong><br/>
-      Email: <a href="mailto:sameerkhan.cse1@gmail.com" style="color: #2563eb; text-decoration: underline;">sameerkhan.cse1@gmail.com</a><br/>
+      Email: <a href="mailto:${process.env.MAIL_USER || "sameerkhan.cse1@gmail.com"}" style="color: #2563eb; text-decoration: underline;">${process.env.MAIL_USER || "sameerkhan.cse1@gmail.com"}</a><br/>
       Phone: <a href="tel:+919412803911" style="color: #2563eb; text-decoration: underline;">+91 9412803911</a><br/>
       Portfolio: <a href="https://sameerwork.vercel.app" style="color: #2563eb; text-decoration: underline;">sameerwork.netlify.app</a><br/>
       GitHub: <a href="https://github.com/sameerkhan9412" style="color: #2563eb; text-decoration: underline;">github.com/sameerkhan9412</a><br/>
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     const results = [];
 
     for (const contact of contacts) {
-      const { hr_name, company_name, name, email } = contact;
+      const { hr_name, company_name, name, email, phone } = contact;
       const rawCompany = company_name || name || "";
 
       if (!email) continue;
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
       try {
         // 📧 Send Email
         const info = await transporter.sendMail({
-          from: `"Sameer" <${process.env.EMAIL_USER}>`,
+          from: `"Sameer" <${process.env.MAIL_USER}>`,
           to: email,
           subject: subject,
           ...(format === "text" ? { text: content } : { html: content }),
@@ -164,6 +164,7 @@ export async function POST(req: NextRequest) {
           email,
           hr_name: formattedHR,
           company: formattedCompany,
+          phone: phone || undefined,
           status: "sent",
           type,
           subject,
@@ -183,6 +184,7 @@ export async function POST(req: NextRequest) {
           email,
           hr_name: formattedHR,
           company: formattedCompany,
+          phone: phone || undefined,
           status: "failed",
           type,
           subject,

@@ -61,7 +61,7 @@ Sameer`;
 
       try {
         const mailOptions = {
-          from: `"Sameer" <${process.env.EMAIL_USER}>`,
+          from: `"Sameer" <${process.env.MAIL_USER}>`,
           to: log.email,
           subject: log.subject.startsWith("Re:") ? log.subject : `Re: ${log.subject}`,
           html: `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #111827;">${bodyText.replace(/\n/g, "<br>")}</div>`,

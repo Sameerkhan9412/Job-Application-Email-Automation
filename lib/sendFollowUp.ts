@@ -1,5 +1,4 @@
 import { transporter } from "./mailer";
-import EmailLog from "@/models/EmailLog";
 
 export const sendFollowUp = async (log: any) => {
   const { email, hr_name, company, messageId, followUpCount, subject } = log;
@@ -24,7 +23,7 @@ Best regards,
 Sameer`;
 
   const info = await transporter.sendMail({
-    from: `"Sameer" <${process.env.EMAIL_USER}>`,
+    from: `"Sameer" <${process.env.MAIL_USER}>`,
     to: email,
     subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
     text: followUpText,

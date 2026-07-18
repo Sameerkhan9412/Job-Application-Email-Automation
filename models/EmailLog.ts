@@ -4,6 +4,7 @@ export interface IEmailLog extends Document {
   email: string;
   hr_name: string;
   company: string;
+  phone?: string;
   type: "direct" | "referral";
   status: "sent" | "failed";
   subject: string;
@@ -29,6 +30,9 @@ const EmailLogSchema = new Schema<IEmailLog>(
       type: String,
     },
     company: {
+      type: String,
+    },
+    phone: {
       type: String,
     },
     type: {
